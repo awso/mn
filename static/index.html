@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcription Service</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Audio Transcription Service</h1>
+        
+        <div class="upload-section">
+            <h2>Upload Audio File</h2>
+            <input type="file" id="audioFile" accept="audio/*" />
+            <button id="uploadButton">Upload and Transcribe</button>
+        </div>
+
+        <div class="transcript-section" id="transcriptSection">
+            <h2>Transcript</h2>
+            <div class="transcript-container" id="transcriptContainer">
+                <!-- Transcript will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
