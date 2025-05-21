@@ -11,11 +11,6 @@ A web application that allows users to upload audio files and get transcriptions
 
 ## Setup
 
-0. Create a `.env` file in the project root with your Hugging Face token:
-```bash
-HUGGING_FACE_TOKEN=your_hugging_face_token
-``` 
-
 1. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
