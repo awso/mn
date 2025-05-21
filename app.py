@@ -71,8 +71,9 @@ def transcribe_audio():
                         return_char_alignments=False)
 
         # diarize
-        diarize_model = whisperx.diarize.DiarizationPipeline(use_auth_token="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",
-                                             device=device)
+        diarize_model = whisperx.diarize.DiarizationPipeline(
+            use_auth_token=os.getenv("HUGGING_FACE_TOKEN"),
+            device=device)
         diarize_segments = diarize_model(audio, min_speakers=1, max_speakers=4)
         logging.info("Segments after diarization: ", diarize_segments)
         
