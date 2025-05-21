@@ -5,9 +5,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakerCustomization = document.getElementById('speakerCustomization');
     const speakerList = document.getElementById('speakerList');
     const updateSpeakersButton = document.getElementById('updateSpeakers');
+    const downloadAudioContainer = document.getElementById('downloadAudioContainer');
 
     let currentTranscript = null;
     let speakerInputs = new Map();
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+
+    const startRecordingButton = document.getElementById('startRecording');
+    const stopRecordingButton = document.getElementById('stopRecording');
+    const recordingStatus = document.getElementById('recordingStatus');
 
     // Add cleanup function
     function cleanup() {
@@ -16,6 +24,13 @@ document.addEventListener('DOMContentLoaded', () => {
         speakerCustomization.style.display = 'none'; // Hide customization section
         speakerInputs.clear(); // Clear speaker input map
         currentTranscript = null; // Reset current transcript
+        mediaRecorder = null;
+        audioChunks = [];
+        isRecording = false;
+        startRecordingButton.disabled = false;
+        stopRecordingButton.disabled = true;
+        recordingStatus.textContent = '';
+        downloadAudioContainer.innerHTML = '';
     }
 
     // Add event listener for file selection
@@ -137,16 +152,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Recording functionality
-    let mediaRecorder;
-    let audioChunks = [];
-    let isRecording = false;
-
-    const startRecordingButton = document.getElementById('startRecording');
-    const stopRecordingButton = document.getElementById('stopRecording');
-    const recordingStatus = document.getElementById('recordingStatus');
-
     async function startRecording() {
         try {
+            cleanup();
+            startRecordingButton.disabled = true;
+            stopRecordingButton.disabled = false;
+            recordingStatus.textContent = 'Recording...';
+            isRecording = true;
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder = new MediaRecorder(stream);
 
@@ -155,17 +167,52 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             mediaRecorder.onstop = async () => {
+                console.log('Recording stopped');
                 const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                
+                if (!audioBlob) {
+                    console.error('Audio blob is null');
+                    return;
+                }
+                console.log('Created audio blob');
+
                 audioChunks = [];
                 stopRecordingButton.disabled = true;
                 startRecordingButton.disabled = false;
                 recordingStatus.textContent = 'Recording stopped. Transcribing...';
 
-                // Create a FormData object with the recorded audio
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recorded_audio.wav');
-
                 try {
+                    // Create audio player
+                    const audioPlayer = document.createElement('audio');
+                    audioPlayer.controls = true;
+                    audioPlayer.style.marginBottom = '1rem';
+                    audioPlayer.src = URL.createObjectURL(audioBlob);
+                    console.log('Created audio player');
+
+                    // Create download link
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = URL.createObjectURL(audioBlob);
+                    downloadLink.download = 'recorded_audio.wav';
+                    downloadLink.className = 'download-link';
+                    downloadLink.textContent = 'Download Recorded Audio';
+                    downloadLink.style.display = 'block';
+                    console.log('Created download link');
+
+                    // Clear existing content and add new elements
+                    
+                    if (!downloadAudioContainer) {
+                        console.error('downloadAudioContainer not found');
+                        return;
+                    }
+                    downloadAudioContainer.innerHTML = '';
+                    downloadAudioContainer.appendChild(audioPlayer);
+                    downloadAudioContainer.appendChild(downloadLink);
+
+                    // Create a FormData object with the recorded audio
+                    const formData = new FormData();
+                    formData.append('audio', audioBlob, 'recorded_audio.wav');
+
+                
                     const response = await fetch('/api/transcribe', {
                         method: 'POST',
                         body: formData
@@ -182,6 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     showSpeakerCustomization(currentTranscript);
 
                 } catch (error) {
+                    console.error('Error processing audio: ' + error.message);
                     alert('Error processing audio: ' + error.message);
                 }
             };
@@ -192,6 +240,7 @@ document.addEventListener('DOMContentLoaded', () => {
             recordingStatus.textContent = 'Recording...';
             isRecording = true;
         } catch (error) {
+            console.error('Error accessing microphone: ' + error.message);
             alert('Error accessing microphone: ' + error.message);
         }
     }

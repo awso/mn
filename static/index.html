@@ -21,6 +21,7 @@
                 <button id="stopRecording" disabled>Stop Recording</button>
                 <span id="recordingStatus">Not recording</span>
             </div>
+            <div id="downloadAudioContainer"></div>
         </div>
 
         <div class="transcript-section" id="transcriptSection">
@@ -40,5 +41,39 @@
     </div>
 
     <script src="script.js"></script>
+    <template id="audio-player-template">
+        <style>
+            :host {
+                width: 100%;
+                max-width: 600px;
+                margin-bottom: 1rem;
+            }
+            audio {
+                width: 100%;
+            }
+        </style>
+        <audio controls></audio>
+    </template>
+    
+    <script>
+        class AudioPlayerElement extends HTMLElement {
+            constructor() {
+                super();
+                const template = document.getElementById('audio-player-template');
+                const templateContent = template.content;
+                
+                const shadowRoot = this.attachShadow({ mode: 'open' });
+                shadowRoot.appendChild(templateContent.cloneNode(true));
+                
+                this.audioElement = shadowRoot.querySelector('audio');
+            }
+    
+            set src(url) {
+                this.audioElement.src = url;
+            }
+        }
+    
+        customElements.define('audio-player', AudioPlayerElement);
+    </script>
 </body>
 </html>

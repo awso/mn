@@ -159,3 +159,22 @@ h1 {
     font-size: 0.9rem;
     color: #666;
 }
+
+.download-section audio {
+    width: 100%;
+    max-width: 600px;
+    margin-bottom: 1rem;
+}
+
+.download-section audio::-webkit-media-controls-panel {
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.download-section audio::-webkit-media-controls-play-button {
+    background-color: #4CAF50;
+}
+
+.download-section audio::-webkit-media-controls-play-button:hover {
+    background-color: #45a049;
+}
