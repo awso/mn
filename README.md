@@ -34,9 +34,12 @@ python app.py
 2. Click "Upload and Transcribe"
 3. Wait for the processing to complete
 4. View the transcript with timestamps and speaker identification
+5. Customize speaker names if needed
+6. Click "Update Speaker Names" to apply changes
 
 ## Supported Audio Formats
 
+- M4A
 - WAV
 - MP3
 - Any format supported by pydub
