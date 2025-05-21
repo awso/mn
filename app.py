@@ -1,22 +1,29 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import tempfile
-import whisper
-from pydub import AudioSegment
 import logging
+import whisperx
+from util import print_segments
+from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__, static_folder='static', static_url_path='')
 CORS(app)
 
-# Load the Whisper model
+device = "cpu"
+batch_size = 16 # reduce if low on GPU mem
+compute_type = "int8" 
+
+# Load the WhisperX model
 try:
-    model = whisper.load_model("base")
-    logging.info("Whisper model loaded successfully")
+    modelX = whisperx.load_model("large-v2", device=device, compute_type=compute_type)
+    logging.info("WhisperX model large-v2 loaded successfully")
 except Exception as e:
-    logging.error(f"Failed to load Whisper model: {str(e)}")
+    logging.error(f"Failed to load WhisperX model: {str(e)}")
     raise
 
 @app.route('/')
@@ -41,30 +48,43 @@ def transcribe_audio():
     try:
         # Create temporary directory
         temp_dir = tempfile.mkdtemp()
+        
+        # Save audio file
         temp_path = os.path.join(temp_dir, "temp_audio.wav")
-        logging.info(f"Created temporary file at: {temp_path}")
-        
-        # Save and convert audio file
         audio_file.save(temp_path)
-        logging.info("Saved audio file to temporary location")
+        logging.info("Saved audio file to temporary location")        
         
-        # Convert to WAV if needed
-        audio = AudioSegment.from_file(temp_path)
-        audio.export(temp_path, format="wav")
-        logging.info("Converted audio to WAV format")
-        
-        # Transcribe using Whisper
+        # Transcribe using WhisperX
         logging.info("Starting transcription with Whisper model")
-        result = model.transcribe(temp_path)
+        audio = whisperx.load_audio(temp_path)
+        result = modelX.transcribe(audio, batch_size=batch_size)
         logging.info("Transcription completed successfully")
+        logging.info("Segments before alignment: ", result["segments"])
+
+        # Align
+        model_a, metadata = whisperx.load_align_model(language_code=result["language"],
+                                              device=device)
+        result = whisperx.align(result["segments"], model_a,
+                        metadata,
+                        audio,
+                        device,
+                        return_char_alignments=False)
+
+        # diarize
+        diarize_model = whisperx.diarize.DiarizationPipeline(use_auth_token="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",
+                                             device=device)
+        diarize_segments = diarize_model(audio, min_speakers=1, max_speakers=4)
+        logging.info("Segments after diarization: ", diarize_segments)
         
+        result = whisperx.assign_word_speakers(diarize_segments, result)
+        print_segments(result['segments']);
         # Format the response
         transcript = []
         for segment in result['segments']:
             transcript.append({
                 'start': segment['start'],
                 'end': segment['end'],
-                'speaker': "Speaker 1",
+                'speaker': segment['speaker'],
                 'text': segment['text']
             })
         
