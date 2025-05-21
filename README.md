@@ -30,7 +30,9 @@ python app.py
 
 ## Usage
 
-1. Click the "Choose File" button to select an audio file
+1. Choose your method:
+   - Click "Choose File" to select an existing audio file
+   - Click "Start Recording" to record audio from your microphone
 2. Click "Upload and Transcribe"
 3. Wait for the processing to complete
 4. View the transcript with timestamps and speaker identification

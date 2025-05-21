@@ -11,9 +11,16 @@
         <h1>Audio Transcription Service</h1>
         
         <div class="upload-section">
-            <h2>Upload Audio File</h2>
-            <input type="file" id="audioFile" accept="audio/*" />
-            <button id="uploadButton">Upload and Transcribe</button>
+            <h2>Upload or Record Audio</h2>
+            <div class="file-upload">
+                <input type="file" id="audioFile" accept="audio/*" />
+                <button id="uploadButton">Upload Audio</button>
+            </div>
+            <div class="recording-controls">
+                <button id="startRecording">Start Recording</button>
+                <button id="stopRecording" disabled>Stop Recording</button>
+                <span id="recordingStatus">Not recording</span>
+            </div>
         </div>
 
         <div class="transcript-section" id="transcriptSection">
