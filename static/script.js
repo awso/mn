@@ -178,79 +178,86 @@ document.addEventListener('DOMContentLoaded', () => {
             recordingStatus.textContent = 'Recording...';
             isRecording = true;
     
-            // Create audio context
-            const audioContext = new AudioContext();
-            
-            try {
-                // Create MediaStreamAudioDestinationNode
-                const destination = audioContext.createMediaStreamDestination();
+            // Get microphone access
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,  // Mono audio
+                    sampleRate: 44100,
+                    sampleSize: 16,
+                    latency: 0.1,
+                    deviceId: null,
+                    groupId: null
+                }
+            });
+    
+            mediaRecorder = new MediaRecorder(stream);
+    
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+    
+            mediaRecorder.onstop = async () => {
+                console.log('Recording stopped');
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
                 
-                // Create a MediaStream from the destination
-                const stream = destination.stream;
-                mediaRecorder = new MediaRecorder(stream);
+                if (!audioBlob) {
+                    console.error('Audio blob is null');
+                    return;
+                }
+                setupAudioControls(audioBlob);
     
-                // Connect the destination to the audio context
-                audioContext.destination.connect(destination);
+                // Create a FormData object with the recorded audio
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recorded_audio.wav');
     
-                mediaRecorder.ondataavailable = (event) => {
-                    audioChunks.push(event.data);
-                };
+                await processTranscription(formData);
+            };
     
-                mediaRecorder.onstop = async () => {
-                    console.log('Recording stopped');
-                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                    
-                    if (!audioBlob) {
-                        console.error('Audio blob is null');
-                        return;
-                    }
-                    console.log('Created audio blob');
+            mediaRecorder.start();
     
-                    audioChunks = [];
-                    stopRecordingButton.disabled = true;
-                    startRecordingButton.disabled = false;
-                    recordingStatus.textContent = 'Recording stopped. Transcribing...';
-    
-                    // Create audio player
-                    const audioPlayer = document.createElement('audio-player');
-                    audioPlayer.controls = true;
-                    audioPlayer.src = URL.createObjectURL(audioBlob);
-                    console.log('Created audio player');
-    
-                    // Create download link
-                    const downloadLink = document.createElement('a');
-                    downloadLink.href = URL.createObjectURL(audioBlob);
-                    downloadLink.download = 'recorded_audio.wav';
-                    downloadLink.className = 'download-link';
-                    downloadLink.textContent = 'Download Recorded Audio';
-                    downloadLink.style.display = 'block';
-                    console.log('Created download link');
-    
-                    // Clear existing content and add new elements
-                    if (!downloadAudioContainer) {
-                        console.error('downloadAudioContainer not found');
-                        return;
-                    }
-                    downloadAudioContainer.innerHTML = '';
-                    downloadAudioContainer.appendChild(audioPlayer);
-                    downloadAudioContainer.appendChild(downloadLink);
-    
-                    // Create a FormData object with the recorded audio
-                    const formData = new FormData();
-                    formData.append('audio', audioBlob, 'recorded_audio.wav');
-    
-                    await processTranscription(formData);
-                };
-    
-                mediaRecorder.start();
-            } catch (error) {
-                console.error('Error setting up audio context: ' + error.message);
-                alert('Error setting up audio recording: ' + error.message);
-            }
         } catch (error) {
             console.error('Error accessing audio: ' + error.message);
             alert('Error accessing audio: ' + error.message);
         }
+    }
+
+
+    function setupAudioControls(audioBlob) {
+        console.log('Created audio blob');
+
+        audioChunks = [];
+        stopRecordingButton.disabled = true;
+        startRecordingButton.disabled = false;
+        recordingStatus.textContent = 'Recording stopped. Transcribing...';
+
+        // Create audio player
+        const audioPlayer = document.createElement('audio-player');
+        audioPlayer.controls = true;
+        audioPlayer.src = URL.createObjectURL(audioBlob);
+        console.log('Created audio player');
+
+        // Create download link
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(audioBlob);
+        downloadLink.download = 'recorded_audio.wav';
+        downloadLink.className = 'download-link';
+        downloadLink.textContent = 'Download Recorded Audio';
+        downloadLink.style.display = 'block';
+        console.log('Created download link');
+
+        // Clear existing content and add new elements
+        if (!downloadAudioContainer) {
+            console.error('downloadAudioContainer not found');
+            return null;
+        }
+        downloadAudioContainer.innerHTML = '';
+        downloadAudioContainer.appendChild(audioPlayer);
+        downloadAudioContainer.appendChild(downloadLink);
+
+        return { audioPlayer, downloadLink };
     }
 
     function stopRecording() {
