@@ -160,21 +160,26 @@ h1 {
     color: #666;
 }
 
-.download-section audio {
-    width: 100%;
-    max-width: 600px;
+.download-section audio-player {
     margin-bottom: 1rem;
 }
 
-.download-section audio::-webkit-media-controls-panel {
+.download-section audio-player audio::-webkit-media-controls-panel {
     background-color: #f8f9fa;
     border-radius: 4px;
 }
 
-.download-section audio::-webkit-media-controls-play-button {
+.download-section audio-player audio::-webkit-media-controls-play-button {
     background-color: #4CAF50;
 }
 
-.download-section audio::-webkit-media-controls-play-button:hover {
+.download-section audio-player audio::-webkit-media-controls-play-button:hover {
     background-color: #45a049;
+}
+
+.no-data-message {
+    text-align: center;
+    color: #666;
+    font-size: 1.2rem;
+    margin-top: 2rem;
 }

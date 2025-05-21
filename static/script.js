@@ -52,21 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('audio', file);
     
         try {
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
-    
-            const data = await response.json();
-    
-            if (data.error) {
-                throw new Error(data.error);
-            }
-    
-            currentTranscript = data.transcript;
-            displayTranscript(currentTranscript);
-            showSpeakerCustomization(currentTranscript);
-    
+            await processTranscription(formData);
         } catch (error) {
             alert('Error processing audio: ' + error.message);
         } finally {
@@ -77,6 +63,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayTranscript(transcript) {
         transcriptContainer.innerHTML = '';
+        
+        if (!transcript || transcript.length === 0) {
+            const noDataElement = document.createElement('div');
+            noDataElement.className = 'no-data-message';
+            noDataElement.textContent = 'Oops, no data available';
+            transcriptContainer.appendChild(noDataElement);
+            return;
+        }
+
         transcript.forEach(segment => {
             const segmentElement = document.createElement('div');
             segmentElement.className = 'transcript-item';
@@ -151,6 +146,29 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
 
+    async function processTranscription(formData) {
+        try {
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+    
+            const data = await response.json();
+    
+            if (data.error) {
+                throw new Error(data.error);
+            }
+    
+            currentTranscript = data.transcript;
+            displayTranscript(currentTranscript);
+            showSpeakerCustomization(currentTranscript);
+    
+        } catch (error) {
+            console.error('Error processing audio: ' + error.message);
+            alert('Error processing audio: ' + error.message);
+        }
+    }
+
     // Recording functionality
     async function startRecording() {
         try {
@@ -159,36 +177,46 @@ document.addEventListener('DOMContentLoaded', () => {
             stopRecordingButton.disabled = false;
             recordingStatus.textContent = 'Recording...';
             isRecording = true;
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                console.log('Recording stopped');
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+    
+            // Create audio context
+            const audioContext = new AudioContext();
+            
+            try {
+                // Create MediaStreamAudioDestinationNode
+                const destination = audioContext.createMediaStreamDestination();
                 
-                if (!audioBlob) {
-                    console.error('Audio blob is null');
-                    return;
-                }
-                console.log('Created audio blob');
-
-                audioChunks = [];
-                stopRecordingButton.disabled = true;
-                startRecordingButton.disabled = false;
-                recordingStatus.textContent = 'Recording stopped. Transcribing...';
-
-                try {
+                // Create a MediaStream from the destination
+                const stream = destination.stream;
+                mediaRecorder = new MediaRecorder(stream);
+    
+                // Connect the destination to the audio context
+                audioContext.destination.connect(destination);
+    
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+    
+                mediaRecorder.onstop = async () => {
+                    console.log('Recording stopped');
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    
+                    if (!audioBlob) {
+                        console.error('Audio blob is null');
+                        return;
+                    }
+                    console.log('Created audio blob');
+    
+                    audioChunks = [];
+                    stopRecordingButton.disabled = true;
+                    startRecordingButton.disabled = false;
+                    recordingStatus.textContent = 'Recording stopped. Transcribing...';
+    
                     // Create audio player
-                    const audioPlayer = document.createElement('audio');
+                    const audioPlayer = document.createElement('audio-player');
                     audioPlayer.controls = true;
-                    audioPlayer.style.marginBottom = '1rem';
                     audioPlayer.src = URL.createObjectURL(audioBlob);
                     console.log('Created audio player');
-
+    
                     // Create download link
                     const downloadLink = document.createElement('a');
                     downloadLink.href = URL.createObjectURL(audioBlob);
@@ -197,9 +225,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     downloadLink.textContent = 'Download Recorded Audio';
                     downloadLink.style.display = 'block';
                     console.log('Created download link');
-
+    
                     // Clear existing content and add new elements
-                    
                     if (!downloadAudioContainer) {
                         console.error('downloadAudioContainer not found');
                         return;
@@ -207,41 +234,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     downloadAudioContainer.innerHTML = '';
                     downloadAudioContainer.appendChild(audioPlayer);
                     downloadAudioContainer.appendChild(downloadLink);
-
+    
                     // Create a FormData object with the recorded audio
                     const formData = new FormData();
                     formData.append('audio', audioBlob, 'recorded_audio.wav');
-
-                
-                    const response = await fetch('/api/transcribe', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const data = await response.json();
-
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-
-                    currentTranscript = data.transcript;
-                    displayTranscript(currentTranscript);
-                    showSpeakerCustomization(currentTranscript);
-
-                } catch (error) {
-                    console.error('Error processing audio: ' + error.message);
-                    alert('Error processing audio: ' + error.message);
-                }
-            };
-
-            mediaRecorder.start();
-            startRecordingButton.disabled = true;
-            stopRecordingButton.disabled = false;
-            recordingStatus.textContent = 'Recording...';
-            isRecording = true;
+    
+                    await processTranscription(formData);
+                };
+    
+                mediaRecorder.start();
+            } catch (error) {
+                console.error('Error setting up audio context: ' + error.message);
+                alert('Error setting up audio recording: ' + error.message);
+            }
         } catch (error) {
-            console.error('Error accessing microphone: ' + error.message);
-            alert('Error accessing microphone: ' + error.message);
+            console.error('Error accessing audio: ' + error.message);
+            alert('Error accessing audio: ' + error.message);
         }
     }
 
