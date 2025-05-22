@@ -5,9 +5,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const speakerCustomization = document.getElementById('speakerCustomization');
     const speakerList = document.getElementById('speakerList');
     const updateSpeakersButton = document.getElementById('updateSpeakers');
+    const downloadAudioContainer = document.getElementById('downloadAudioContainer');
 
     let currentTranscript = null;
     let speakerInputs = new Map();
+    let mediaRecorder;
+    let audioChunks = [];
+    let isRecording = false;
+
+    const startRecordingButton = document.getElementById('startRecording');
+    const stopRecordingButton = document.getElementById('stopRecording');
+    const recordingStatus = document.getElementById('recordingStatus');
 
     // Add cleanup function
     function cleanup() {
@@ -16,6 +24,13 @@ document.addEventListener('DOMContentLoaded', () => {
         speakerCustomization.style.display = 'none'; // Hide customization section
         speakerInputs.clear(); // Clear speaker input map
         currentTranscript = null; // Reset current transcript
+        mediaRecorder = null;
+        audioChunks = [];
+        isRecording = false;
+        startRecordingButton.disabled = false;
+        stopRecordingButton.disabled = true;
+        recordingStatus.textContent = '';
+        downloadAudioContainer.innerHTML = '';
     }
 
     // Add event listener for file selection
@@ -37,21 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('audio', file);
     
         try {
-            const response = await fetch('/api/transcribe', {
-                method: 'POST',
-                body: formData
-            });
-    
-            const data = await response.json();
-    
-            if (data.error) {
-                throw new Error(data.error);
-            }
-    
-            currentTranscript = data.transcript;
-            displayTranscript(currentTranscript);
-            showSpeakerCustomization(currentTranscript);
-    
+            await processTranscription(formData);
         } catch (error) {
             alert('Error processing audio: ' + error.message);
         } finally {
@@ -62,6 +63,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayTranscript(transcript) {
         transcriptContainer.innerHTML = '';
+        startRecordingButton.disabled = false;
+        stopRecordingButton.disabled = true;
+        recordingStatus.textContent = 'Not recording';
+        
+        if (!transcript || transcript.length === 0) {
+            const noDataElement = document.createElement('div');
+            noDataElement.className = 'no-data-message';
+            noDataElement.textContent = 'Oops, no data available';
+            transcriptContainer.appendChild(noDataElement);
+            return;
+        }
+
         transcript.forEach(segment => {
             const segmentElement = document.createElement('div');
             segmentElement.className = 'transcript-item';
@@ -136,64 +149,121 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
     }
 
+    async function processTranscription(formData) {
+        try {
+            const response = await fetch('/api/transcribe', {
+                method: 'POST',
+                body: formData
+            });
+    
+            const data = await response.json();
+    
+            if (data.error) {
+                throw new Error(data.error);
+            }
+    
+            currentTranscript = data.transcript;
+            displayTranscript(currentTranscript);
+            showSpeakerCustomization(currentTranscript);
+    
+        } catch (error) {
+            console.error('Error processing audio: ' + error.message);
+            alert('Error processing audio: ' + error.message);
+        }
+    }
+
     // Recording functionality
-    let mediaRecorder;
-    let audioChunks = [];
-    let isRecording = false;
-
-    const startRecordingButton = document.getElementById('startRecording');
-    const stopRecordingButton = document.getElementById('stopRecording');
-    const recordingStatus = document.getElementById('recordingStatus');
-
     async function startRecording() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream);
-
-            mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
-            };
-
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
-                audioChunks = [];
-                stopRecordingButton.disabled = true;
-                startRecordingButton.disabled = false;
-                recordingStatus.textContent = 'Recording stopped. Transcribing...';
-
-                // Create a FormData object with the recorded audio
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'recorded_audio.wav');
-
-                try {
-                    const response = await fetch('/api/transcribe', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const data = await response.json();
-
-                    if (data.error) {
-                        throw new Error(data.error);
-                    }
-
-                    currentTranscript = data.transcript;
-                    displayTranscript(currentTranscript);
-                    showSpeakerCustomization(currentTranscript);
-
-                } catch (error) {
-                    alert('Error processing audio: ' + error.message);
-                }
-            };
-
-            mediaRecorder.start();
+            cleanup();
             startRecordingButton.disabled = true;
             stopRecordingButton.disabled = false;
             recordingStatus.textContent = 'Recording...';
             isRecording = true;
+    
+            // Get audio stream with basic settings
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            devices.forEach(device => console.log(`${device.kind}: ${device.label}`));
+            const fallbackMic = devices.find(d => d.kind === 'audioinput');
+            console.log('Fallback mic: ', fallbackMic);
+        
+            const stream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    deviceId: fallbackMic?.deviceId || undefined,
+                    echoCancellation: false, //disable this, otherwise it does not record sounds from the mic.
+                    noiseSuppression: true, 
+                }
+            });
+    
+            mediaRecorder = new MediaRecorder(stream);
+    
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
+            };
+    
+            mediaRecorder.onstop = async () => {
+                console.log('Recording stopped');
+                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                
+                if (!audioBlob) {
+                    console.error('Audio blob is null');
+                    return;
+                }
+                console.log('Created audio blob');
+                setupAudioControls(audioBlob);
+    
+                // Create a FormData object with the recorded audio
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'recorded_audio.wav');
+    
+                await processTranscription(formData);
+            };
+    
+            mediaRecorder.start();
+    
         } catch (error) {
-            alert('Error accessing microphone: ' + error.message);
+            console.error('Error accessing audio: ' + error.message);
+            alert('Error accessing audio: ' + error.message);
         }
+    }
+
+
+    function setupAudioControls(audioBlob) {
+        console.log('Creating audio controls');
+
+        audioChunks = [];
+        stopRecordingButton.disabled = true;
+        startRecordingButton.disabled = false;
+        recordingStatus.textContent = 'Recording stopped. Transcribing...';
+
+        // Create audio player
+        const audioPlayer = document.createElement('audio-player');
+        audioPlayer.controls = true;
+        audioPlayer.src = URL.createObjectURL(audioBlob);
+        console.log('Created audio player');
+
+        // Create download link
+        const downloadLink = document.createElement('a');
+        downloadLink.href = URL.createObjectURL(audioBlob);
+        downloadLink.download = 'recorded_audio.wav';
+        downloadLink.className = 'download-link';
+        downloadLink.textContent = 'Download Recorded Audio';
+        downloadLink.style.display = 'block';
+        console.log('Created download link');
+
+        // Clear existing content and add new elements
+        if (!downloadAudioContainer) {
+            console.error('downloadAudioContainer not found');
+            return null;
+        }
+        downloadAudioContainer.innerHTML = '';
+        downloadAudioContainer.appendChild(audioPlayer);
+        downloadAudioContainer.appendChild(downloadLink);
+
+        return { audioPlayer, downloadLink };
     }
 
     function stopRecording() {
