@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayTranscript(transcript) {
         transcriptContainer.innerHTML = '';
+        startRecordingButton.disabled = false;
+        stopRecordingButton.disabled = true;
+        recordingStatus.textContent = 'Not recording';
         
         if (!transcript || transcript.length === 0) {
             const noDataElement = document.createElement('div');
@@ -178,25 +181,27 @@ document.addEventListener('DOMContentLoaded', () => {
             recordingStatus.textContent = 'Recording...';
             isRecording = true;
     
-            // Get microphone access
+            // Get audio stream with basic settings
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            devices.forEach(device => console.log(`${device.kind}: ${device.label}`));
+            const fallbackMic = devices.find(d => d.kind === 'audioinput');
+            console.log('Fallback mic: ', fallbackMic);
+        
             const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 1,  // Mono audio
-                    sampleRate: 44100,
-                    sampleSize: 16,
-                    latency: 0.1,
-                    deviceId: null,
-                    groupId: null
+                    deviceId: fallbackMic?.deviceId || undefined,
+                    echoCancellation: false, //disable this, otherwise it does not record sounds from the mic.
+                    noiseSuppression: true, 
                 }
             });
     
             mediaRecorder = new MediaRecorder(stream);
     
             mediaRecorder.ondataavailable = (event) => {
-                audioChunks.push(event.data);
+                if (event.data.size > 0) {
+                    audioChunks.push(event.data);
+                }
             };
     
             mediaRecorder.onstop = async () => {
@@ -207,6 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.error('Audio blob is null');
                     return;
                 }
+                console.log('Created audio blob');
                 setupAudioControls(audioBlob);
     
                 // Create a FormData object with the recorded audio
@@ -226,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function setupAudioControls(audioBlob) {
-        console.log('Created audio blob');
+        console.log('Creating audio controls');
 
         audioChunks = [];
         stopRecordingButton.disabled = true;
