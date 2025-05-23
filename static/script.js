@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let mediaRecorder;
     let audioChunks = [];
     let isRecording = false;
+    let currentStream = null;
 
     const startRecordingButton = document.getElementById('startRecording');
     const stopRecordingButton = document.getElementById('stopRecording');
@@ -19,6 +20,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Add cleanup function
     function cleanup() {
+        // Clean up existing recording
+        if (mediaRecorder) {
+            mediaRecorder.stop();
+            mediaRecorder = null;
+        }
+        if (currentStream) {
+            currentStream.getTracks().forEach(track => {
+                track.stop();
+            });
+            currentStream = null;
+        }
         transcriptContainer.innerHTML = ''; // Clear transcripts
         speakerList.innerHTML = ''; // Clear speaker customization inputs
         speakerCustomization.style.display = 'none'; // Hide customization section
@@ -196,6 +208,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
     
+            // Store the stream reference for cleanup
+            currentStream = stream;
             mediaRecorder = new MediaRecorder(stream);
     
             mediaRecorder.ondataavailable = (event) => {
@@ -219,6 +233,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const formData = new FormData();
                 formData.append('audio', audioBlob, 'recorded_audio.wav');
     
+                // *** IMPORTANT: Stop the stream's tracks *after* onstop processing ***
+                // This ensures the microphone is released after all recording-related tasks are done.
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => {
+                        track.stop(); // Stop each track in the stream
+                        console.log(`Track stopped: ${track.kind} - ${track.label}`);
+                        });
+                    currentStream = null; // Clear the reference
+                }
+
                 await processTranscription(formData);
             };
     
@@ -230,6 +254,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function stopRecording() {
+        if (mediaRecorder && isRecording && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop(); // This will trigger mediaRecorder.onstop
+            console.log('stopRecording() called. Waiting for onstop event...');
+            // Do NOT set mediaRecorder = null or isRecording = false here.
+            // These cleanups should happen inside mediaRecorder.onstop
+            // to ensure proper sequence and resource release.
+        } else {
+            console.log('MediaRecorder not active or not recording.');
+        }
+    }
 
     function setupAudioControls(audioBlob) {
         console.log('Creating audio controls');
@@ -264,13 +299,6 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadAudioContainer.appendChild(downloadLink);
 
         return { audioPlayer, downloadLink };
-    }
-
-    function stopRecording() {
-        if (mediaRecorder && isRecording) {
-            mediaRecorder.stop();
-            isRecording = false;
-        }
     }
 
     startRecordingButton.addEventListener('click', startRecording);
